@@ -1,0 +1,46 @@
+module mac_unit #(
+    parameter DW    = 8,   // operand width
+    parameter ACC_W = 32   // accumulator width
+) (
+  input signed [DW-1 :0] a, b, 
+  input valid_in, //are numbers meaningful?
+  input clear_acc, //is this 1st term of new sum?
+  input rst_n,
+  input clk,
+  output reg valid_out, 
+  output reg signed [ACC_W-1 :0] acc_out
+);
+
+reg signed [2*DW-1:0] product;
+reg prev_valid;
+reg prev_clear;
+
+always @(posedge clk or negedge rst_n) begin
+  if (!rst_n) begin
+    acc_out <= 0;
+    valid_out <= 0;
+    prev_valid <= 0;
+    prev_clear <= 0;
+    product <= 0;
+  end
+  else begin
+    prev_valid <= valid_in;
+    prev_clear <= clear_acc;
+    product <= $signed(a) * $signed(b);
+    valid_out <= prev_valid;
+
+    if(prev_valid && prev_clear) begin
+      /* verilator lint_off WIDTHEXPAND */
+      acc_out <= product;
+      /* verilator lint_on WIDTHEXPAND */
+
+    end
+
+    else if (prev_valid && !prev_clear) begin
+      /* verilator lint_off WIDTHEXPAND */
+      acc_out <= acc_out + product;
+      /* verilator lint_on WIDTHEXPAND */
+    end
+  end
+end
+endmodule
