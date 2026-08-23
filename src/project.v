@@ -1,11 +1,11 @@
 /*
- * Copyright (c) 2024 Your Name
+ * Copyright (c) 2024 Simran Kaur
  * SPDX-License-Identifier: Apache-2.0
  */
 
 `default_nettype none
 
-module tt_um_example (
+module tt_um_kaursome10_run_nn (
     input  wire [7:0] ui_in,    // Dedicated inputs
     output wire [7:0] uo_out,   // Dedicated outputs
     input  wire [7:0] uio_in,   // IOs: Input path
@@ -16,12 +16,30 @@ module tt_um_example (
     input  wire       rst_n     // reset_n - low to reset
 );
 
-  // All output pins must be assigned. If not used, assign to 0.
-  assign uo_out  = ui_in + uio_in;  // Example: ou_out is the sum of ui_in and uio_in
-  assign uio_out = 0;
-  assign uio_oe  = 0;
+    wire        start   = uio_in[0];
+    wire        ld_en   = uio_in[1];
+    wire [5:0]  ld_addr = uio_in[7:2];
+    wire [7:0]  ld_data = ui_in;
 
-  // List all unused inputs to prevent warnings
-  wire _unused = &{ena, clk, rst_n, 1'b0};
+    wire        valid_o;
+    wire [3:0]  out_o;
+
+    assign uo_out  = {3'b000, valid_o, out_o};
+    assign uio_out = 8'b0;
+    assign uio_oe  = 8'b0;
+
+    // List all unused inputs to prevent warnings
+    wire _unused = &{ena, 1'b0};
+
+    run_NN nn (
+        .clk     (clk),
+        .rst_n   (rst_n),
+        .start   (start),
+        .ld_en   (ld_en),
+        .ld_addr (ld_addr),
+        .ld_data (ld_data),
+        .valid   (valid_o),
+        .out     (out_o)
+    );
 
 endmodule

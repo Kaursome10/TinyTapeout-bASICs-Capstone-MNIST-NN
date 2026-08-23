@@ -2,7 +2,7 @@
 
 module run_NN #(
     parameter DW      = 8,
-    parameter IMG_SIZE = 14 * 14, // 196
+    parameter IMG_SIZE = 7 * 7, // 196
 
     // requant params: out = clamp((acc * MULT) >> SHIFT, 0, QMAX)
     // placeholders -- calibrate against your actual trained scale factors
@@ -23,9 +23,9 @@ module run_NN #(
   output wire [3:0] out
 );
 
-    localparam N1 = 40,  M1 = IMG_SIZE; // layer1: 196 -> 64
-    localparam N2 = 16,  M2 = 40;       // layer2: 64  -> 32
-    localparam N3 = 10,  M3 = 16;       // layer3: 32  -> 10
+    localparam N1 = 64,  M1 = IMG_SIZE; // layer1: 196 -> 64
+    localparam N2 = 32,  M2 = 64;       // layer2: 64  -> 32
+    localparam N3 = 10,  M3 = 32;       // layer3: 32  -> 10
 
     localparam MAXN = 64; // widest layer, sizes the drain counter
 
@@ -59,7 +59,7 @@ module run_NN #(
     wire [DW-1:0]      h1out_q;
 
     wire [$clog2(N1)-1:0] h1_rd_addr;
-    reg  [$clog2(N1)-1:0] h1_rd_addr_r;
+    // reg  [$clog2(N1)-1:0] h1_rd_addr_r;
     assign h1_rd_addr = cnt[$clog2(N1)-1:0];
 
     matvec_top_banked #(.N(N1), .M(M1), .DW(DW), .ACC_W(32), .INIT_FILE("weights/weights_W1.mem")) h1 (
