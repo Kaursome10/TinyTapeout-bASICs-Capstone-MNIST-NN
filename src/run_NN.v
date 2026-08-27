@@ -8,7 +8,10 @@ module run_NN #(
     // power-of-two approximation to your calibrated scales; re-derive
     // from your own calibration script if you retrain.
     parameter R1_SHIFT = 5'd10,
-    parameter R2_SHIFT = 5'd9
+    parameter R2_SHIFT = 5'd9,
+
+
+    parameter ACC_W = 24
 ) (
   input clk,
   input rst_n,
@@ -19,11 +22,6 @@ module run_NN #(
   input  wire [$clog2(IMG_SIZE)-1:0] ld_addr,
   input  wire signed [DW-1:0]   ld_data,
 
-  // streamed weight interface: one 8-bit weight per pulse, in the same
-  // row-major order the old .mem files were already written in --
-  // layer 1's N1*M1 weights, then layer 2's N2*M2, then layer 3's N3*M3.
-  // Broadcast to all three layers: only the layer currently in COMPUTE
-  // state will actually respond to a given pulse, so no muxing is needed.
   input  wire                   weight_valid,
   input  wire signed [DW-1:0]   weight_data,
 
@@ -32,9 +30,9 @@ module run_NN #(
   output wire [3:0] out
 );
 
-    localparam N1 = 50,  M1 = IMG_SIZE; // layer1: 49 -> 64
-    localparam N2 = 25,  M2 = 50;       // layer2: 64 -> 32
-    localparam N3 = 10,  M3 = 25;       // layer3: 32 -> 10
+    localparam N1 = 50,  M1 = IMG_SIZE; // layer1: 49 -> 50
+    localparam N2 = 25,  M2 = 50;       // layer2: 50 -> 25
+    localparam N3 = 10,  M3 = 25;       // layer3: 25 -> 10
 
     localparam MAXN = 50; // widest layer, sizes the drain counter
 
@@ -56,24 +54,19 @@ module run_NN #(
     reg h1_start, h2_start, h3_start;
     wire h1_done, h2_done, h3_done;
 
-    // ld_en shares a physical pin with weight_valid (both driven by the
-    // same top-level "data_valid" wire). weight_valid pulses continuously
-    // during compute, so ld_en must be explicitly gated to S_IDLE only --
-    // otherwise every weight-streaming pulse would also spuriously
-    // rewrite h1's pixel vector memory mid-computation.
     wire h1_pixel_ld_en = ld_en && (state == S_IDLE);
 
     // ---------------------------------------------------------------
-    // Layer 1: image(49) x W1(64x49) -> h1out(64)
+    // Layer 1: image(49) x W1(50x49) -> h1out(50)
     // ---------------------------------------------------------------
-    wire signed [31:0] h1out;
-    wire signed [31:0] h1out_relu;
-    wire [DW-1:0]      h1out_q;
+    wire signed [ACC_W-1:0] h1out;
+    wire signed [ACC_W-1:0] h1out_relu;
+    wire [DW-1:0]           h1out_q;
 
     wire [$clog2(N1)-1:0] h1_rd_addr;
     assign h1_rd_addr = cnt[$clog2(N1)-1:0];
 
-    matvec_top_banked #(.N(N1), .M(M1), .DW(DW), .ACC_W(32)) h1 (
+    matvec_top_banked #(.N(N1), .M(M1), .DW(DW), .ACC_W(ACC_W)) h1 (
         .clk          (clk),
         .rst_n        (rst_n),
         .start        (h1_start),
@@ -88,22 +81,22 @@ module run_NN #(
         .rd_data      (h1out)
     );
 
-    relu #(.W(32)) relu1 (.in(h1out), .out(h1out_relu));
-    requant #(.SHIFT(R1_SHIFT)) rq1 (.acc(h1out_relu), .h_out(h1out_q));
+    relu #(.W(ACC_W)) relu1 (.in(h1out), .out(h1out_relu));
+    requant #(.SHIFT(R1_SHIFT), .ACC_W(ACC_W)) rq1 (.acc(h1out_relu), .h_out(h1out_q));
 
     // ---------------------------------------------------------------
-    // Layer 2: h1out_q(64) x W2(32x64) -> h2out(32)
+    // Layer 2: h1out_q(50) x W2(25x50) -> h2out(25)
     // ---------------------------------------------------------------
-    wire signed [31:0] h2out;
-    wire signed [31:0] h2out_relu;
-    wire [DW-1:0]      h2out_q;
+    wire signed [ACC_W-1:0] h2out;
+    wire signed [ACC_W-1:0] h2out_relu;
+    wire [DW-1:0]           h2out_q;
 
     wire [$clog2(N2)-1:0] h2_rd_addr;
     assign h2_rd_addr = cnt[$clog2(N2)-1:0];
 
     wire h1_drain_wr_en = (state == S_H1_DRAIN) && (cnt < N1);
 
-    matvec_top_banked #(.N(N2), .M(M2), .DW(DW), .ACC_W(32)) h2 (
+    matvec_top_banked #(.N(N2), .M(M2), .DW(DW), .ACC_W(ACC_W)) h2 (
         .clk          (clk),
         .rst_n        (rst_n),
         .start        (h2_start),
@@ -118,20 +111,20 @@ module run_NN #(
         .rd_data      (h2out)
     );
 
-    relu #(.W(32)) relu2 (.in(h2out), .out(h2out_relu));
-    requant #(.SHIFT(R2_SHIFT)) rq2 (.acc(h2out_relu), .h_out(h2out_q));
+    relu #(.W(ACC_W)) relu2 (.in(h2out), .out(h2out_relu));
+    requant #(.SHIFT(R2_SHIFT), .ACC_W(ACC_W)) rq2 (.acc(h2out_relu), .h_out(h2out_q));
 
     // ---------------------------------------------------------------
-    // Layer 3: h2out_q(32) x W3(10x32) -> final(10)  (no ReLU/requant)
+    // Layer 3: h2out_q(25) x W3(10x25) -> final(10)  (no ReLU/requant)
     // ---------------------------------------------------------------
-    wire signed [31:0] final_out;
+    wire signed [ACC_W-1:0] final_out;
 
     wire [$clog2(N3)-1:0] h3_rd_addr;
     assign h3_rd_addr = cnt[$clog2(N3)-1:0];
 
     wire h2_drain_wr_en = (state == S_H2_DRAIN) && (cnt < N2);
 
-    matvec_top_banked #(.N(N3), .M(M3), .DW(DW), .ACC_W(32)) h3 (
+    matvec_top_banked #(.N(N3), .M(M3), .DW(DW), .ACC_W(ACC_W)) h3 (
         .clk          (clk),
         .rst_n        (rst_n),
         .start        (h3_start),
@@ -149,28 +142,16 @@ module run_NN #(
     // ---------------------------------------------------------------
     // Collect final layer's 10 scores, then argmax
     // ---------------------------------------------------------------
-    reg signed [319:0] scores_flat;
+    reg signed [10*ACC_W-1:0] scores_flat;
     wire [3:0] argmax_idx;
 
     always @(posedge clk) begin
         if (state == S_H3_DRAIN && cnt < N3) begin
-            case (cnt[3:0])
-                4'd0: scores_flat[31:0]     <= final_out;
-                4'd1: scores_flat[63:32]    <= final_out;
-                4'd2: scores_flat[95:64]    <= final_out;
-                4'd3: scores_flat[127:96]  <= final_out;
-                4'd4: scores_flat[159:128]  <= final_out;
-                4'd5: scores_flat[191:160]  <= final_out;
-                4'd6: scores_flat[223:192]  <= final_out;
-                4'd7: scores_flat[255:224]  <= final_out;
-                4'd8: scores_flat[287:256]  <= final_out;
-                4'd9: scores_flat[319:288]  <= final_out;
-                default: ; // ignore out-of-range cnt values
-            endcase
+            scores_flat[cnt*ACC_W +: ACC_W] <= final_out;
         end
     end
 
-    argmax amax (.in_flat(scores_flat), .max_index(argmax_idx));
+    argmax #(.N(10), .WIDTH(ACC_W)) amax (.in_flat(scores_flat), .max_index(argmax_idx));
 
     reg valid_r;
     reg [3:0] out_r;
