@@ -22,7 +22,7 @@ project:
     - "relu.v"
     - "requant.sv"
     - "argmax.sv"
-    - "matvec_top_streamed.v"
+    - "matvec_top_banked.v"
     - "run_NN.v"
     - "project.v"
 
