@@ -32,11 +32,11 @@ module run_NN #(
   output wire [3:0] out
 );
 
-    localparam N1 = 64,  M1 = IMG_SIZE; // layer1: 49 -> 64
-    localparam N2 = 32,  M2 = 64;       // layer2: 64 -> 32
-    localparam N3 = 10,  M3 = 32;       // layer3: 32 -> 10
+    localparam N1 = 50,  M1 = IMG_SIZE; // layer1: 49 -> 64
+    localparam N2 = 25,  M2 = 50;       // layer2: 64 -> 32
+    localparam N3 = 10,  M3 = 25;       // layer3: 32 -> 10
 
-    localparam MAXN = 64; // widest layer, sizes the drain counter
+    localparam MAXN = 50; // widest layer, sizes the drain counter
 
     // ---------------------------------------------------------------
     // FSM
