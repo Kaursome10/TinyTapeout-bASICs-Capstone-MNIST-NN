@@ -1,17 +1,24 @@
 module mac_unit #(
-    parameter DW    = 8,   // operand width
+    parameter DW    = 8,   // activation (b) operand width
+    parameter WW    = DW,  // weight (a) operand width -- can be narrower than DW.
+                            // Declaring `a` at this width (rather than DW with
+                            // internal truncation) means every wire feeding
+                            // into this port, all the way back to the pin, is
+                            // genuinely WW bits wide -- not just truncated
+                            // at the last step.
     parameter ACC_W = 32   // accumulator width
 ) (
-  input signed [DW-1 :0] a, b, 
-  input valid_in, //are numbers meaningful?
-  input clear_acc, //is this 1st term of new sum?
+  input signed [WW-1:0] a,
+  input signed [DW-1:0] b,
+  input valid_in,
+  input clear_acc,
   input rst_n,
   input clk,
-  output reg valid_out, 
+  output reg valid_out,
   output reg signed [ACC_W-1 :0] acc_out
 );
 
-reg signed [2*DW-1:0] product;
+reg signed [WW+DW-1:0] product;
 reg prev_valid;
 reg prev_clear;
 
@@ -33,9 +40,7 @@ always @(posedge clk or negedge rst_n) begin
       /* verilator lint_off WIDTHEXPAND */
       acc_out <= product;
       /* verilator lint_on WIDTHEXPAND */
-
     end
-
     else if (prev_valid && !prev_clear) begin
       /* verilator lint_off WIDTHEXPAND */
       acc_out <= acc_out + product;

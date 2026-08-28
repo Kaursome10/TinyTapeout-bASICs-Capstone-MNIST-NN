@@ -13,7 +13,8 @@
 module matvec_top_banked #(
     parameter N     = 8,   // number of rows in A / length of output vector
     parameter M     = 8,   // number of cols in A / length of input vector
-    parameter DW    = 8,   // input operand width (signed INT8)
+    parameter DW    = 8,   // input operand wire width (pins/buses stay this wide)
+    parameter WW    = DW,  // meaningful weight bits actually used (<=DW)
     parameter ACC_W = 32   // accumulator / output width
 ) (
     input  wire clk,
@@ -29,7 +30,7 @@ module matvec_top_banked #(
 
     // streamed weight input: one matrix element per pulse, row-major order
     input  wire                   weight_valid,
-    input  wire signed [DW-1:0]   weight_data,
+    input  wire signed [WW-1:0]   weight_data,
 
     input  wire rd_en,
     input  wire [$clog2(N)-1:0]  rd_addr,
@@ -56,7 +57,7 @@ module matvec_top_banked #(
     wire clear_acc  = feeding && (kC == 0);
 
     // Matrix element comes straight from the top-level port now.
-    wire signed [DW-1:0] m_rdata = weight_data;
+    wire signed [WW-1:0] m_rdata = weight_data;
 
     // Vector x: M elements (unchanged)
     mem #(.N(1'b1), .M(M), .DW(DW)) mem_V (
@@ -72,7 +73,7 @@ module matvec_top_banked #(
     wire                    mac_valid_out;
     wire signed [ACC_W-1:0] mac_acc_out;
 
-    mac_unit #(.DW(DW), .ACC_W(ACC_W)) mac0 (
+    mac_unit #(.DW(DW), .WW(WW), .ACC_W(ACC_W)) mac0 (
         .clk       (clk),
         .rst_n     (rst_n),
         .valid_in  (valid_in),

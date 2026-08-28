@@ -2,6 +2,11 @@
 
 module run_NN #(
     parameter DW      = 8,
+    // Meaningful weight bits actually used inside the multiplier (<=DW).
+    // Weights still arrive as full DW-bit (8-bit) bytes over the pins --
+    // this only narrows the multiplier itself, not the pin/wire width.
+    // int4 weights (range -8 to 7) -> WW=4.
+    parameter WW      = 4,
     parameter IMG_SIZE = 7 * 7, // 49
 
     // Power-of-two requant scale factors -- see requant.sv. Nearest
@@ -23,7 +28,7 @@ module run_NN #(
   input  wire signed [DW-1:0]   ld_data,
 
   input  wire                   weight_valid,
-  input  wire signed [DW-1:0]   weight_data,
+  input  wire signed [WW-1:0]   weight_data,
 
   // classified number
   output wire valid,
@@ -66,7 +71,7 @@ module run_NN #(
     wire [$clog2(N1)-1:0] h1_rd_addr;
     assign h1_rd_addr = cnt[$clog2(N1)-1:0];
 
-    matvec_top_banked #(.N(N1), .M(M1), .DW(DW), .ACC_W(ACC_W)) h1 (
+    matvec_top_banked #(.N(N1), .M(M1), .DW(DW), .WW(WW), .ACC_W(ACC_W)) h1 (
         .clk          (clk),
         .rst_n        (rst_n),
         .start        (h1_start),
@@ -96,7 +101,7 @@ module run_NN #(
 
     wire h1_drain_wr_en = (state == S_H1_DRAIN) && (cnt < N1);
 
-    matvec_top_banked #(.N(N2), .M(M2), .DW(DW), .ACC_W(ACC_W)) h2 (
+    matvec_top_banked #(.N(N2), .M(M2), .DW(DW), .WW(WW), .ACC_W(ACC_W)) h2 (
         .clk          (clk),
         .rst_n        (rst_n),
         .start        (h2_start),
@@ -124,7 +129,7 @@ module run_NN #(
 
     wire h2_drain_wr_en = (state == S_H2_DRAIN) && (cnt < N2);
 
-    matvec_top_banked #(.N(N3), .M(M3), .DW(DW), .ACC_W(ACC_W)) h3 (
+    matvec_top_banked #(.N(N3), .M(M3), .DW(DW), .WW(WW), .ACC_W(ACC_W)) h3 (
         .clk          (clk),
         .rst_n        (rst_n),
         .start        (h3_start),

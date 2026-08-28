@@ -29,7 +29,9 @@ module tt_um_kaursome10_run_nn (
     wire        start        = uio_in[0];
     wire        data_valid   = uio_in[1];
     wire [5:0]  ld_addr      = uio_in[7:2];
-    wire [7:0]  data_in      = ui_in;
+    wire [7:0]  data_in      = ui_in;      // full byte -- used for pixels (8-bit)
+    wire [3:0]  weight_nibble = ui_in[3:0]; // low nibble only -- used for weights (4-bit).
+
 
     wire        valid_o;
     wire [3:0]  out_o;
@@ -49,7 +51,7 @@ module tt_um_kaursome10_run_nn (
         .ld_addr      (ld_addr),
         .ld_data      (data_in),
         .weight_valid (data_valid),
-        .weight_data  (data_in),
+        .weight_data  (weight_nibble),
         .valid        (valid_o),
         .out          (out_o)
     );
