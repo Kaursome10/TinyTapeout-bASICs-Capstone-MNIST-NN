@@ -2,16 +2,10 @@
 
 module run_NN #(
     parameter DW      = 8,
-    // Meaningful weight bits actually used inside the multiplier (<=DW).
-    // Weights still arrive as full DW-bit (8-bit) bytes over the pins --
-    // this only narrows the multiplier itself, not the pin/wire width.
     // int4 weights (range -8 to 7) -> WW=4.
     parameter WW      = 4,
     parameter IMG_SIZE = 7 * 7, // 49
 
-    // Power-of-two requant scale factors -- see requant.sv. Nearest
-    // power-of-two approximation to your calibrated scales; re-derive
-    // from your own calibration script if you retrain.
     parameter R1_SHIFT = 5'd10,
     parameter R2_SHIFT = 5'd9,
 

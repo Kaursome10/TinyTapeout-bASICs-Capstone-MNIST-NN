@@ -1,13 +1,4 @@
 // Matrix-Vector multiplication: (N x M) x (M x 1) = (N x 1)
-// STREAMED-WEIGHT VARIANT: the matrix A is no longer stored on-chip in a
-// ROM. Instead, weight_data/weight_valid feed one matrix element per
-// pulse, in the exact same row-major order the old INIT_FILE .mem files
-// were already written in (row 0 col 0..M-1, row 1 col 0..M-1, ...).
-// If weight_valid is low on a cycle where a weight is needed, the whole
-// pipeline simply stalls that cycle -- no handshake logic needed beyond
-// this AND gate, since the existing MAC_LATENCY pipeline already runs
-// unconditionally every clock and only writes back when a true valid
-// pulse reaches the far end.
 `timescale 1ns/1ps
 
 module matvec_top_banked #(
@@ -88,8 +79,6 @@ module matvec_top_banked #(
     reg                 last_sr [0:MAC_LATENCY-1];
     integer s;
 
-    // Unchanged: runs unconditionally every clock, matching mac_unit's own
-    // internal unconditional shift, so alignment holds regardless of stalls.
     always @(posedge clk) begin
         addr_sr[0] <= iC[$clog2(N)-1:0];
         last_sr[0] <= (kC == M-1);

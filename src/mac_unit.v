@@ -1,11 +1,6 @@
 module mac_unit #(
     parameter DW    = 8,   // activation (b) operand width
-    parameter WW    = DW,  // weight (a) operand width -- can be narrower than DW.
-                            // Declaring `a` at this width (rather than DW with
-                            // internal truncation) means every wire feeding
-                            // into this port, all the way back to the pin, is
-                            // genuinely WW bits wide -- not just truncated
-                            // at the last step.
+    parameter WW    = DW,  // weight (a) operand width
     parameter ACC_W = 32   // accumulator width
 ) (
   input signed [WW-1:0] a,

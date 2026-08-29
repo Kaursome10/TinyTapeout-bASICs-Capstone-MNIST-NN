@@ -2,11 +2,9 @@ module argmax #(
     parameter N     = 10,
     parameter WIDTH = 32
 )(
-    // Packed bus: in_flat[WIDTH*i +: WIDTH] corresponds to index i
     input  wire signed [N*WIDTH-1:0] in_flat,
     output reg  [3:0] max_index
 );
-
     integer i;
     reg signed [WIDTH-1:0] mv;
     reg signed [WIDTH-1:0] val;

@@ -16,16 +16,6 @@ module tt_um_kaursome10_run_nn (
     input  wire       rst_n     // reset_n - low to reset
 );
 
-    // uio_in[1] ("data_valid") is reused for two different meanings
-    // depending on phase, since pixel loading and weight streaming never
-    // happen at the same time:
-    //   - before `start`: it's ld_en, gating pixel writes (paired with
-    //     ld_addr on uio_in[7:2] and pixel byte on ui_in)
-    //   - during compute (after `start`, before `valid`): it's
-    //     weight_valid, gating one streamed weight byte per pulse on
-    //     ui_in. ld_addr is ignored during this phase since weight order
-    //     is implicit (matches the row-major order weights were already
-    //     stored in), so no addressing is needed.
     wire        start        = uio_in[0];
     wire        data_valid   = uio_in[1];
     wire [5:0]  ld_addr      = uio_in[7:2];
