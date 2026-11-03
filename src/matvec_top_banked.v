@@ -19,11 +19,14 @@ module matvec_top_banked #(
     input  wire [$clog2(M)-1:0]   ld_addr,
     input  wire signed [DW-1:0]   ld_data,
 
+    // Active dimensions allow one physical engine to serve multiple layers.
+    input  wire [$clog2(N+1)-1:0] active_n,
+    input  wire [$clog2(M+1)-1:0] active_m,
+
     // streamed weight input: one matrix element per pulse, row-major order
     input  wire                   weight_valid,
     input  wire signed [WW-1:0]   weight_data,
 
-    input  wire rd_en,
     input  wire [$clog2(N)-1:0]  rd_addr,
     output reg  signed [ACC_W-1:0] rd_data
 );
@@ -43,7 +46,7 @@ module matvec_top_banked #(
 
     // Only advance the schedule -- and only let the MAC consume this
     // cycle's data -- when a weight byte is actually present.
-    wire feeding    = (state == COMPUTE) && (iC < N) && weight_valid;
+    wire feeding    = (state == COMPUTE) && (iC < active_n) && weight_valid;
     wire valid_in   = feeding;
     wire clear_acc  = feeding && (kC == 0);
 
@@ -81,7 +84,7 @@ module matvec_top_banked #(
 
     always @(posedge clk) begin
         addr_sr[0] <= iC[$clog2(N)-1:0];
-        last_sr[0] <= (kC == M-1);
+        last_sr[0] <= feeding && (kC == active_m - 1'b1);
         for (s = 1; s < MAC_LATENCY; s = s + 1) begin
             addr_sr[s] <= addr_sr[s-1];
             last_sr[s] <= last_sr[s-1];
@@ -132,7 +135,7 @@ module matvec_top_banked #(
 
                     // Only step forward on cycles where a weight actually arrived.
                     if (feeding) begin
-                        if (kC == M-1) begin
+                        if (kC == active_m - 1'b1) begin
                             kC <= 0;
                             iC <= iC + 1;
                         end
@@ -144,7 +147,7 @@ module matvec_top_banked #(
                     if (mac_valid_out && mac_last_out) begin
                         tC <= tC + 1;
                     end
-                    if (mac_valid_out && mac_last_out && (tC == N - 1)) begin
+                    if (mac_valid_out && mac_last_out && (tC == active_n - 1'b1)) begin
                         state <= DONE;
                     end
                 end

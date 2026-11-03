@@ -13,3 +13,5 @@ module requant #(
 
     assign h_out = clamped[7:0];
 endmodule
+
+//
