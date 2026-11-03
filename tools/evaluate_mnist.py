@@ -1,8 +1,13 @@
 """Evaluate the checked-in quantized weights on all 10,000 MNIST test images."""
 
 import argparse
+import os
 import numpy as np
 from torchvision.datasets import MNIST
+
+# Determine the project main directory (one level up from this tools directory)
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+DEFAULT_WEIGHTS_DIR = os.path.join(ROOT_DIR, "src", "weights")
 
 
 def load_weights(filename, shape):
@@ -19,15 +24,16 @@ def requantize(values, shift):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--weights-dir", default="src/weights")
+    parser.add_argument("--weights-dir", default=DEFAULT_WEIGHTS_DIR)
     parser.add_argument("--data-dir", default="/tmp/mnist-data")
     args = parser.parse_args()
 
     weights = [
-        load_weights(f"{args.weights_dir}/weights_W1.mem", (50, 49)),
-        load_weights(f"{args.weights_dir}/weights_W2.mem", (25, 50)),
-        load_weights(f"{args.weights_dir}/weights_W3.mem", (10, 25)),
+        load_weights(os.path.join(args.weights_dir, "weights_W1.mem"), (50, 49)),
+        load_weights(os.path.join(args.weights_dir, "weights_W2.mem"), (25, 50)),
+        load_weights(os.path.join(args.weights_dir, "weights_W3.mem"), (10, 25)),
     ]
+    
     dataset = MNIST(args.data_dir, train=False, download=True)
     images = dataset.data.numpy().astype(np.int32)
     pixels = np.rint(images.reshape(-1, 7, 4, 7, 4).mean((2, 4)))

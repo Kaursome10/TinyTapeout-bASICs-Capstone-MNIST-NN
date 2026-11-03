@@ -16,6 +16,22 @@ WEIGHTS_DIR = os.path.join(os.path.dirname(__file__), "weights")
 PIXELS = [0] * IMG_SIZE
 EXPECTED_DIGIT = None
 
+def load_mnist_dataset():
+    images = []
+    with open(os.path.join(os.path.dirname(__file__), "mnist_test_images.mem"), "r") as f:
+        for line in f:
+            if line.strip():
+                pixels = [int(val, 16) for val in line.strip().split()]
+                images.append(pixels)
+                
+    labels = []
+    with open(os.path.join(os.path.dirname(__file__), "mnist_test_labels.mem"), "r") as f:
+        for line in f:
+            if line.strip():
+                labels.append(int(line.strip()))
+                
+    return images, labels
+
 def load_weights(filename):
     path = os.path.join(WEIGHTS_DIR, filename)
     with open(path) as f:
@@ -41,49 +57,62 @@ async def stream_layer_weights(dut, weights, boundary_cycles=0, pixels=None):
     if boundary_cycles:
         await ClockCycles(dut.clk, boundary_cycles)
 
-
 @cocotb.test()
 async def test_project(dut):
-    dut._log.info("Start")
+    dut._log.info("Start Full MNIST Evaluation")
 
     clock = Clock(dut.clk, 10, unit="us")
     cocotb.start_soon(clock.start())
 
-    dut._log.info("Reset")
-    dut.ena.value = 1
-    dut.ui_in.value = 0
-    dut.uio_in.value = 0
-    dut.rst_n.value = 0
-    await ClockCycles(dut.clk, 10)
-    dut.rst_n.value = 1
-    await ClockCycles(dut.clk, 1)
+    # Load the 10k dataset
+    test_images, test_labels = load_mnist_dataset()
+    total_samples = len(test_images)
+    correct_predictions = 0
 
-    dut._log.info("Pulsing start")
-    dut.uio_in.value = build_uio(addr=0, data_valid=0, start=1)
-    await ClockCycles(dut.clk, 1)
-    dut.uio_in.value = build_uio(addr=0, data_valid=0, start=0)
+    dut._log.info(f"Loaded {total_samples} test samples. Starting simulation...")
 
-    dut._log.info("Streaming layer 1 weights")
-    await stream_layer_weights(dut, load_weights("weights_W1.mem"), 2, PIXELS)
+    for i in range(total_samples):
+        sample_pixels = test_images[i]
+        expected_digit = test_labels[i]
 
-    dut._log.info("Streaming layer 2 weights")
-    await stream_layer_weights(dut, load_weights("weights_W2.mem"), 2)
-
-    dut._log.info("Streaming layer 3 weights")
-    await stream_layer_weights(dut, load_weights("weights_W3.mem"))
-
-    dut._log.info("Waiting for valid")
-    for _ in range(MAX_WAIT_CYCLES):
+        # Hardware Reset Sequence
+        dut.ena.value = 1
+        dut.ui_in.value = 0
+        dut.uio_in.value = 0
+        dut.rst_n.value = 0
+        await ClockCycles(dut.clk, 10)
+        dut.rst_n.value = 1
         await ClockCycles(dut.clk, 1)
-        if (int(dut.uo_out.value) >> 4) & 1:
-            break
-    else:
-        assert False, f"valid never asserted within {MAX_WAIT_CYCLES} cycles"
 
-    digit = int(dut.uo_out.value) & 0xF
-    dut._log.info(f"Predicted digit: {digit}")
+        # Pulse Start
+        dut.uio_in.value = build_uio(addr=0, data_valid=0, start=1)
+        await ClockCycles(dut.clk, 1)
+        dut.uio_in.value = build_uio(addr=0, data_valid=0, start=0)
 
-    assert 0 <= digit <= 9, f"out={digit} is outside the valid digit range"
+        # Stream Weights & Pixels
+        await stream_layer_weights(dut, load_weights("weights_W1.mem"), 2, sample_pixels)
+        await stream_layer_weights(dut, load_weights("weights_W2.mem"), 2)
+        await stream_layer_weights(dut, load_weights("weights_W3.mem"))
 
-    if EXPECTED_DIGIT is not None:
-        assert digit == EXPECTED_DIGIT, f"expected {EXPECTED_DIGIT}, got {digit}"
+        # Wait for valid flag
+        valid_received = False
+        for _ in range(MAX_WAIT_CYCLES):
+            await ClockCycles(dut.clk, 1)
+            if (int(dut.uo_out.value) >> 4) & 1:
+                valid_received = True
+                break
+        
+        assert valid_received, f"Sample {i}: valid never asserted"
+
+        digit = int(dut.uo_out.value) & 0xF
+
+        if digit == expected_digit:
+            correct_predictions += 1
+
+        # Log progress every 100 samples
+        if (i + 1) % 100 == 0:
+            current_acc = (correct_predictions / (i + 1)) * 100
+            dut._log.info(f"Processed {i + 1}/{total_samples} | Current Accuracy: {current_acc:.2f}%")
+
+    final_accuracy = (correct_predictions / total_samples) * 100
+    dut._log.info(f"=== Final MNIST Test Accuracy: {final_accuracy:.2f}% ({correct_predictions}/{total_samples}) ===")

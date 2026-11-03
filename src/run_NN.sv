@@ -137,6 +137,7 @@ module run_NN #(
             end
             else begin
                 if (pending) begin
+                    pending <= 1'b0; // Clear pending once commit happens
                     case (pending_layer)
                         L1: h1[pending_row] <= quantize_relu(acc, R1_SHIFT);
                         L2: h2[pending_row[4:0]] <= quantize_relu(acc, R2_SHIFT);
@@ -152,6 +153,19 @@ module run_NN #(
                             end
                         end
                     endcase
+
+                    if (pending_row == last_row) begin
+                        if (pending_layer == L1) begin
+                            layer <= L2;
+                            row <= 0;
+                            col <= 0;
+                        end
+                        else if (pending_layer == L2) begin
+                            layer <= L3;
+                            row <= 0;
+                            col <= 0;
+                        end
+                    end
                 end
 
                 if (accept) begin
@@ -166,20 +180,6 @@ module run_NN #(
                     end
                     else begin
                         col <= col + 1'b1;
-                    end
-                end
-
-                if (pending && (pending_row == last_row)) begin
-                    pending <= 1'b0;
-                    if (pending_layer == L1) begin
-                        layer <= L2;
-                        row <= 0;
-                        col <= 0;
-                    end
-                    else if (pending_layer == L2) begin
-                        layer <= L3;
-                        row <= 0;
-                        col <= 0;
                     end
                 end
             end
