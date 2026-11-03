@@ -1,3 +1,5 @@
+`timescale 1ns/1ps
+
 /*
  * Copyright (c) 2024 Simran Kaur
  * SPDX-License-Identifier: Apache-2.0
@@ -18,9 +20,9 @@ module tt_um_kaursome10_run_nn (
 
     wire        start        = uio_in[0];
     wire        data_valid   = uio_in[1];
-    wire [5:0]  ld_addr      = uio_in[7:2];
-    wire [7:0]  data_in      = ui_in;      // full byte -- used for pixels (8-bit)
-    wire [3:0]  weight_nibble = ui_in[3:0]; // low nibble only -- used for weights (4-bit).
+    wire [5:0] ld_addr      = uio_in[7:2];
+    wire [7:0] data_in      = ui_in;      // pixel byte during layer-1 streaming
+    wire [3:0] weight_nibble = uio_in[7:4]; // weight nibble during inference
 
 
     wire        valid_o;

@@ -16,9 +16,6 @@ WEIGHTS_DIR = os.path.join(os.path.dirname(__file__), "weights")
 PIXELS = [0] * IMG_SIZE
 EXPECTED_DIGIT = None
 
-COMPUTE_STATE = 1  # matvec_top_streamed's localparam COMPUTE = 1
-
-
 def load_weights(filename):
     path = os.path.join(WEIGHTS_DIR, filename)
     with open(path) as f:
@@ -27,25 +24,22 @@ def load_weights(filename):
                 for line in f if line.strip()]
 
 
-def build_uio(addr: int, data_valid: int, start: int) -> int:
+def build_uio(addr: int = 0, data_valid: int = 0, start: int = 0, weight: int = 0) -> int:
+    if data_valid and weight:
+        return ((weight & 0xF) << 4) | ((data_valid & 1) << 1) | (start & 1)
     return ((addr & 0x3F) << 2) | ((data_valid & 1) << 1) | (start & 1)
 
 
-async def stream_layer_weights(dut, layer_inst, weights):
-    """Wait for a specific matvec_top_streamed instance to enter COMPUTE,
-    then feed its weights one per cycle. Drain-phase gaps (where no layer
-    is computing) are skipped by design -- no pulses are sent, and hence
-    none are dropped, since we only assert weight_valid once this exact
-    layer is actively listening."""
-    while int(layer_inst.state.value) != COMPUTE_STATE:
-        await RisingEdge(dut.clk)
-
-    for w in weights:
-        dut.ui_in.value = w & 0xFF
-        dut.uio_in.value = build_uio(addr=0, data_valid=1, start=0)
+async def stream_layer_weights(dut, weights, boundary_cycles=0, pixels=None):
+    """Stream one row-major matrix, then wait for its pending final row commit."""
+    for index, w in enumerate(weights):
+        dut.ui_in.value = (pixels[index % IMG_SIZE] if pixels else 0) & 0xFF
+        dut.uio_in.value = build_uio(data_valid=1, weight=w)
         await RisingEdge(dut.clk)
 
     dut.uio_in.value = build_uio(addr=0, data_valid=0, start=0)
+    if boundary_cycles:
+        await ClockCycles(dut.clk, boundary_cycles)
 
 
 @cocotb.test()
@@ -64,30 +58,19 @@ async def test_project(dut):
     dut.rst_n.value = 1
     await ClockCycles(dut.clk, 1)
 
-    dut._log.info("Loading pixels")
-    for addr in range(IMG_SIZE):
-        dut.ui_in.value = PIXELS[addr] & 0xFF
-        dut.uio_in.value = build_uio(addr=addr, data_valid=1, start=0)
-        await ClockCycles(dut.clk, 1)
-
-    dut.uio_in.value = build_uio(addr=0, data_valid=0, start=0)
-    await ClockCycles(dut.clk, 1)
-
     dut._log.info("Pulsing start")
     dut.uio_in.value = build_uio(addr=0, data_valid=0, start=1)
     await ClockCycles(dut.clk, 1)
     dut.uio_in.value = build_uio(addr=0, data_valid=0, start=0)
 
-    nn = dut.user_project.nn
-
     dut._log.info("Streaming layer 1 weights")
-    await stream_layer_weights(dut, nn.h1, load_weights("weights_W1.mem"))
+    await stream_layer_weights(dut, load_weights("weights_W1.mem"), 2, PIXELS)
 
     dut._log.info("Streaming layer 2 weights")
-    await stream_layer_weights(dut, nn.h2, load_weights("weights_W2.mem"))
+    await stream_layer_weights(dut, load_weights("weights_W2.mem"), 2)
 
     dut._log.info("Streaming layer 3 weights")
-    await stream_layer_weights(dut, nn.h3, load_weights("weights_W3.mem"))
+    await stream_layer_weights(dut, load_weights("weights_W3.mem"))
 
     dut._log.info("Waiting for valid")
     for _ in range(MAX_WAIT_CYCLES):
