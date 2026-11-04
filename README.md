@@ -10,7 +10,7 @@ SystemVerilog source, the cocotb testbench and the Tiny Tapeout configuration us
 (SKY130). It started as a larger, ROM-based design (8-bit weights) and was redesigned to fit a Tiny Tapeout tile.
 We acknowledge the MIT Beaver Works Summer Institute (BWSI) for their guidance and for creating this opportunity.
 
-Project contributors: Simran Kaur, Mihir Kotamraju
+Project contributors: Simran Kaur, Mihir Kotamraju, Nimay Shah, Franklin Chen
 
 ## At a glance
 
