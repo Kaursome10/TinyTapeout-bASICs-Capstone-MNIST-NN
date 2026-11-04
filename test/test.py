@@ -8,6 +8,7 @@ from cocotb.triggers import ClockCycles, RisingEdge
 
 IMG_SIZE = 49
 MAX_WAIT_CYCLES = 30000
+NUM_IMAGES = int(os.environ.get("NUM_IMAGES", "10000"))   # local default stays 10k
 
 WEIGHTS_DIR = os.path.join(os.path.dirname(__file__), "weights")
 
@@ -66,7 +67,7 @@ async def test_project(dut):
 
     # Load the 10k dataset
     test_images, test_labels = load_mnist_dataset()
-    total_samples = len(test_images)
+    total_samples = min(NUM_IMAGES, len(test_images))
     correct_predictions = 0
 
     dut._log.info(f"Loaded {total_samples} test samples. Starting simulation...")
@@ -116,3 +117,5 @@ async def test_project(dut):
 
     final_accuracy = (correct_predictions / total_samples) * 100
     dut._log.info(f"=== Final MNIST Test Accuracy: {final_accuracy:.2f}% ({correct_predictions}/{total_samples}) ===")
+
+    assert final_accuracy >= 90.0, f"accuracy {final_accuracy:.2f}% is below the 90% floor"
