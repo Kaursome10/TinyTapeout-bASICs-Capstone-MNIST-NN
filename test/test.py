@@ -15,14 +15,20 @@ from cocotb.triggers import ClockCycles, FallingEdge
 
 WEIGHTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src", "weights")
 
+# Network size and number formats: must match nn_core's parameters.
+HID1, HID2 = (40, 20)
+ABITS = 6      # bits per hidden activation
+PBITS = 8      # pixel bits used (top bits of the 8-bit pixel)
+REQUANT_SHIFTS = [7, 4]   # after layer 1 and layer 2 (R1_SHIFT, R2_SHIFT)
+AMAX = (1 << ABITS) - 1
+ACC_BITS = 18       # accumulator width chosen by nn_core
+
 # (rows, cols, weight file) for each layer, weights stored row-major
 LAYERS = [
-    (50, 49, "weights_W1.mem"),
-    (25, 50, "weights_W2.mem"),
-    (10, 25, "weights_W3.mem"),
+    (HID1, 49, "weights_W1.mem"),
+    (HID2, HID1, "weights_W2.mem"),
+    (10, HID2, "weights_W3.mem"),
 ]
-REQUANT_SHIFTS = [6, 5]   # after layer 1 and layer 2, must match nn_core's R1_SHIFT / R2_SHIFT
-PIXEL_SIGNED = False      # must match nn_core's PIXEL_SIGNED parameter
 
 # First 20 digits of the MNIST test set, shrunk to 7x7 by averaging each 4x4
 # block (pixel values 0..255). Format: (label, pixels row by row).
@@ -73,12 +79,12 @@ def load_all_weights():
 def requant(acc, shift):
     """ReLU, round, divide by 2^shift, clamp to 0..127."""
     acc = max(acc, 0)
-    return min((acc + (1 << (shift - 1))) >> shift, 127)
+    return min((acc + (1 << (shift - 1))) >> shift, AMAX)
 
 
 def reference(pixels, weights):
     """Returns (digit, scores) exactly as the hardware computes them."""
-    x = [(p - 256 if (PIXEL_SIGNED and p >= 128) else p) for p in pixels]
+    x = [p >> (8 - PBITS) for p in pixels]
     for layer, (rows, cols, _) in enumerate(LAYERS):
         w = weights[layer]
         sums = [sum(w[i * cols + k] * x[k] for k in range(cols)) for i in range(rows)]
@@ -137,8 +143,15 @@ async def stream_elements(dut, pixels, weights, rng=None, stall_prob=0.0, limit=
                 while rng is not None and rng.random() < stall_prob:
                     dut.uio_in.value = uio()
                     await FallingEdge(dut.clk)
+                waited = 0
+                while outputs(dut)["ready"] == 0:
+                    # ready drops for one cycle between layers while the last row is stored
+                    assert i == 0 and k == 0 and layer > 0 and waited < 2, \
+                        f"ready dropped at layer {layer + 1} row {i} col {k}"
+                    dut.uio_in.value = uio()
+                    await FallingEdge(dut.clk)
+                    waited += 1
                 o = outputs(dut)
-                assert o["ready"] == 1, f"ready dropped at layer {layer + 1} row {i} col {k}"
                 assert o["layer"] == layer + 1, f"expected layer {layer + 1}, chip says {o['layer']}"
                 assert o["done"] == 0, "done went high before all elements were sent"
                 dut.ui_in.value = pixels[k] if layer == 0 else 0
@@ -198,13 +211,13 @@ def test_images():
 
 @cocotb.test()
 async def test_reference_model_ranges(dut):
-    """Sanity check the model itself: sums fit in the 18-bit accumulator."""
+    """Sanity check the model itself: sums fit in the accumulator."""
     weights = load_all_weights()
     worst = 0
     all_images = list(test_images().values()) + [p for _, p in MNIST_SAMPLES]
     all_images.append([255] * 49)  # brightest possible image
     for pixels in all_images:
-        x = [(p - 256 if (PIXEL_SIGNED and p >= 128) else p) for p in pixels]
+        x = [p >> (8 - PBITS) for p in pixels]
         for layer, (rows, cols, _) in enumerate(LAYERS):
             w = weights[layer]
             sums = [sum(w[i * cols + k] * x[k] for k in range(cols)) for i in range(rows)]
@@ -212,7 +225,7 @@ async def test_reference_model_ranges(dut):
             if layer < 2:
                 x = [requant(s, REQUANT_SHIFTS[layer]) for s in sums]
     dut._log.info(f"largest |sum| seen: {worst}")
-    assert worst < (1 << 17)
+    assert worst < (1 << (ACC_BITS - 1))
 
 
 @cocotb.test()
@@ -232,7 +245,7 @@ async def test_images_back_to_back(dut):
 @cocotb.test()
 async def test_real_mnist_digits(dut):
     """Real handwritten digits: chip must match the model exactly, and the
-    model gets 19 of these 20 right (91.2% over the full 10,000-digit test set)."""
+    chip agrees with the model on every one; sanity-check that most are correct."""
     weights = load_all_weights()
     await reset(dut)
     correct = 0
@@ -241,7 +254,7 @@ async def test_real_mnist_digits(dut):
         correct += got == label
         dut._log.info(f"MNIST #{n}: label {label}, chip says {got}")
     dut._log.info(f"chip classified {correct}/{len(MNIST_SAMPLES)} real digits correctly")
-    assert correct >= 19
+    assert correct >= 17
 
 
 @cocotb.test()
@@ -263,6 +276,6 @@ async def test_restart_mid_run(dut):
     await reset(dut)
 
     await pulse_start(dut)
-    await stream_elements(dut, images[1], weights, limit=2700)  # stop partway into layer 2
+    await stream_elements(dut, images[1], weights, limit=HID1 * 49 + (HID2 * HID1) // 2)  # stop partway into layer 2
 
     await run_image(dut, images[2], weights)
