@@ -1,3 +1,5 @@
+`timescale 1ns/1ps
+
 /*
  * Copyright (c) 2024 Simran Kaur
  * SPDX-License-Identifier: Apache-2.0

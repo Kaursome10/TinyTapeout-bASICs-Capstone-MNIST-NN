@@ -28,6 +28,8 @@ jobs:
   gl_test:
     needs: gds
     runs-on: ubuntu-24.04
+    env:
+      NUM_IMAGES: 1000
     steps:
       - name: checkout repo
         uses: actions/checkout@v6
