@@ -67,6 +67,25 @@ The sizes are set by parameters in `src/nn_core.v`:
 
 The full pin description, host pseudocode and data preparation are in [docs/info.md](docs/info.md).
 
+## Simulation waveforms
+
+These are captures from the RTL simulation (Icarus Verilog) of the first MNIST test image, a 7, driven through the chip pins at a 25 ns clock.
+The chip is reset, `start` is pulsed, and the host starts streaming weights and pixels:
+
+![Reset, start pulse and the first weights](./docs/gtkwave_start.png)
+
+The whole inference at a glance: layer 1 takes 1,960 elements, layer 2 takes 800 and layer 3 takes 200 (2,963 cycles, about 74 µs in total):
+
+![Whole inference](./docs/gtkwave_overview.png)
+
+The transition from layer 1 to layer 2: after the last layer-1 weight, `ready` and `in_valid` drop for one cycle while the last neuron is stored, then `layer` becomes 2:
+
+![Layer 1 to layer 2 transition](./docs/gtkwave_boundary.png)
+
+The end of the run: the last layer-3 weights, then `done` goes high and `digit` shows 7:
+
+![Result: done and the predicted digit](./docs/gtkwave_result.png)
+
 ## Repository layout
 
 | Path | Contents |
@@ -115,6 +134,12 @@ python tools/full_accuracy.py
 
 The RTL result, 9,621 of 10,000 images correct, equals the Python model in `tools/eval_accuracy.py` on every image.
 
+![Full 10,000-image RTL run: 96.21 % accuracy](./docs/testbench.png)
+
+How the chip sees the data: the first ten test images, their 7×7 inputs and the digit the RTL predicts (green is correct, red is wrong):
+
+![Example inferences](./docs/inference_examples.png)
+
 ## Physical implementation
 
 Hardened with LibreLane (OpenROAD) for SKY130 on a 1×2 Tiny Tapeout tile at a 25 ns clock (40 MHz).
@@ -128,6 +153,12 @@ Hardened with LibreLane (OpenROAD) for SKY130 on a 1×2 Tiny Tapeout tile at a 2
 | LVS | clean |
 | Antenna violations | none |
 | Setup and hold timing | met at 25 ns |
+
+After hardening, the layout is DRC and LVS clean. The full 1×2 tile as rendered by the Tiny Tapeout GDS viewer, and a close-up of the metal routing:
+
+![GDS layout of the 1x2 tile](./docs/gds_layout.jpg)
+
+![3D close-up of the routing](./docs/gds_3d.jpg)
 
 ## Limitations
 
