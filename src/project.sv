@@ -18,34 +18,40 @@ module tt_um_kaursome10_run_nn (
     input  wire       rst_n     // reset_n - low to reset
 );
 
-    wire        start        = uio_in[0];
-    wire        data_valid   = uio_in[1];
-    wire [5:0] ld_addr      = uio_in[7:2];
-    wire [7:0] data_in      = ui_in;      // pixel byte during layer-1 streaming
-    wire [3:0] weight_nibble = uio_in[7:4]; // weight nibble during inference
+    // Inputs
+    //   ui_in[7:0]  pixel x[k] (layer 1 only)
+    //   uio_in[0]   start
+    //   uio_in[1]   in_valid: an element is present this cycle
+    //   uio_in[7:4] weight W[i][k] (signed int4)
+    // Outputs
+    //   uo_out[3:0] predicted digit
+    //   uo_out[4]   done (held until the next start)
+    //   uo_out[5]   ready (elements are being accepted)
+    //   uo_out[7:6] layer being fed (1-3), 0 when not accepting
 
+    wire       ready;
+    wire       done;
+    wire [1:0] layer;
+    wire [3:0] digit;
 
-    wire        valid_o;
-    wire [3:0]  out_o;
+    nn_core nn (
+        .clk      (clk),
+        .rst_n    (rst_n),
+        .start    (uio_in[0]),
+        .in_valid (uio_in[1]),
+        .pixel    (ui_in),
+        .weight   (uio_in[7:4]),
+        .ready    (ready),
+        .layer_o  (layer),
+        .done     (done),
+        .digit    (digit)
+    );
 
-    assign uo_out  = {3'b000, valid_o, out_o};
+    assign uo_out  = {layer, ready, done, digit};
     assign uio_out = 8'b0;
-    assign uio_oe  = 8'b0;
+    assign uio_oe  = 8'b0;  // all uio pins are inputs
 
     // List all unused inputs to prevent warnings
-    wire _unused = &{ena, 1'b0};
-
-    run_NN nn (
-        .clk          (clk),
-        .rst_n        (rst_n),
-        .start        (start),
-        .ld_en        (data_valid),
-        .ld_addr      (ld_addr),
-        .ld_data      (data_in),
-        .weight_valid (data_valid),
-        .weight_data  (weight_nibble),
-        .valid        (valid_o),
-        .out          (out_o)
-    );
+    wire _unused = &{ena, uio_in[3:2], 1'b0};
 
 endmodule
