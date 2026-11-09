@@ -10,7 +10,7 @@
 
 This project is a tiny ASIC that recognises handwritten digits. It runs a quantized 3-layer neural network
 (49 → 40 → 20 → 10) on a 7×7 version of an MNIST image and reports the predicted digit, 0 to 9. The network reaches
-**96.21 %** accuracy on the full 10,000-image MNIST test set in RTL simulation. This repository contains the training script,
+**96.21 %** accuracy on the full 10,000-image MNIST test set in RTL simulation. This repository contains the trained weights,
 the Verilog source, the cocotb testbench and the Tiny Tapeout configuration used to tape the design out on a **1×2 tile**
 (SKY130). An earlier version of this project kept its weights in an on-chip ROM; this version streams 4-bit weights in so that it fits a 1×2 tile.
 We acknowledge the MIT Beaver Works Summer Institute (BWSI) for their guidance and for creating this opportunity.
@@ -98,26 +98,19 @@ The end of the run: the last layer-3 weights, then `done` goes high and `digit` 
 | `src/project.v` | Tiny Tapeout wrapper `tt_um_kaursome10_run_nn`: maps the pins to the network |
 | `src/nn_core.v` | The neural network: control, shift-add MAC, requantization, argmax |
 | `src/weights/` | Trained int4 weights (`weights_W1/W2/W3.mem`, one hex digit per line) |
-| `train/train_qat.py` | Quantization-aware training; exports the `.mem` weight files |
-| `tools/eval_accuracy.py` | Bit-exact Python model; reports accuracy on the 10,000 test images |
-| `tools/full_accuracy.py` | Runs all 10,000 test images through the RTL with Icarus Verilog |
-| `test/` | cocotb testbench (`test.py`, `tb.v`, `Makefile`, `requirements.txt`) and `bulk/tb_bulk.v` for the full 10,000-image run |
-| `.github/workflows/full_accuracy.yaml` | Workflow that runs the 10,000-image RTL test and prints the accuracy |
+| `src/config.json` | Hardening (LibreLane) configuration |
+| `test/` | cocotb testbench (`test.py`, `tb.v`, `Makefile`, `requirements.txt`), the 7×7 MNIST test set (`mnist_test_images.mem`, `mnist_test_labels.mem`) and the script that generates it (`generate.py`) |
+| `sim/` | Standalone protocol testbench (`tb_protocol.v`) with a sample image (`pix.mem`) |
+| `tools/` | Early training and evaluation scripts (`train_quantized.py`, `evaluate_mnist.py`) for a 49 → 50 → 25 → 10 variant with shifts of 6 and 5. They do not match the current 40 → 20 → 10 network and cannot regenerate or check the weights in `src/weights/` |
+| `.github/workflows/` | CI: `gds`, `test`, `docs` and `fpga` |
 | `docs/` | Datasheet (`info.md`) and the images used in the docs |
 | `info.yaml` | Tiny Tapeout project description and pinout |
 
-## Training and evaluating the weights
+## Weights
 
-The training model mirrors the hardware: 7×7 average-pooled pixels, signed int4 weights, ReLU, rounded shifts of 7 and 4, and a 0…63 clamp.
-Quantization-aware training uses a straight-through estimator, so the forward pass is bit-exact with the chip while the
-gradients flow through the rounding.
+The trained weights are checked in as `src/weights/weights_W1.mem`, `weights_W2.mem` and `weights_W3.mem` (signed int4, one hex digit per line, row-major: 1,960 + 800 + 200 values). They were trained with quantization-aware training that mirrors the hardware: 7×7 average-pooled pixels, signed int4 weights, ReLU, rounded shifts of 7 and 4, and a 0…63 clamp, using a straight-through estimator so the forward pass is bit-exact with the chip.
 
-```sh
-python train/train_qat.py --epochs 300 --h1 40 --h2 20 --A 6 --P 8 --aug 1 --T 32 --lr 0.03 --s1 7 --s2 4 --seed 1 --out src/weights
-python tools/eval_accuracy.py                 # prints accuracy on the 10,000 test images
-```
-
-`train_qat.py` reads the four MNIST `.gz` files (`train-images-idx3-ubyte.gz`, `train-labels-idx1-ubyte.gz`, `t10k-images-idx3-ubyte.gz`, `t10k-labels-idx1-ubyte.gz`) from the folder in the `MNIST_DIR` environment variable, or from `./mnist/` if it is not set. `tools/eval_accuracy.py` and `tools/full_accuracy.py` download MNIST through torchvision unless you pass `--mnist-dir DIR` with a folder holding those files.
+The training script that produced these exact weights is not included in this repository. The scripts in `tools/` are earlier versions for a different network size (see the layout table above).
 
 ## Testbench
 
@@ -138,14 +131,7 @@ make                  # RTL simulation
 make -B GATES=yes     # gate-level simulation (needs the netlist from the GDS workflow)
 ```
 
-To measure accuracy on all 10,000 test images, run the **full_accuracy** workflow from the Actions tab (*Run workflow*),
-or locally:
-
-```sh
-python tools/full_accuracy.py
-```
-
-The RTL result, 9,621 of 10,000 images correct, equals the Python model in `tools/eval_accuracy.py` on every image.
+The checked-in weights classify 9,621 of the 10,000 MNIST test images correctly (96.21 %) when run through the same arithmetic as `reference()` in `test/test.py`, using the 7×7 inputs in `test/mnist_test_images.mem` and the labels in `test/mnist_test_labels.mem`. The full 10,000-image RTL run shown below is not part of CI.
 
 ![Full 10,000-image RTL run: 96.21 % accuracy](./docs/testbench.png)
 
@@ -185,4 +171,3 @@ After hardening, the layout is DRC and LVS clean. The full 1×2 tile as rendered
 - [docs/info.md](docs/info.md): datasheet with pins, protocol and test instructions
 - [Tiny Tapeout](https://tinytapeout.com) and its [FAQ](https://tinytapeout.com/faq/)
 - [Build your design locally](https://www.tinytapeout.com/guides/local-hardening/)
-- Enable [GitHub Pages](https://tinytapeout.com/faq/#my-github-action-is-failing-on-the-pages-part) so the GitHub Action can publish the results page.
