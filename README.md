@@ -167,6 +167,11 @@ After hardening, the layout is DRC and LVS clean. The full 1×2 tile as rendered
 - **High utilization.** The 1×2 tile is about 78 % full, so there is little room for further logic.
 - **Accuracy trade-off.** A 7×7 input and 4-bit weights cost accuracy compared with a full-size network. Accuracy was measured on the MNIST test set with 4×4 box-average preprocessing.
 
+<p align="center">
+  <img src="docs/MITRE_logo.png" alt="MITRE" width="200"><br>
+  <em>MITRE: Proud sponsor of Basics of ASICs</em>
+</p>
+
 ## Resources
 
 - [docs/info.md](docs/info.md): datasheet with pins, protocol and test instructions
