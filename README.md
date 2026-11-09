@@ -1,13 +1,18 @@
 ![](../../workflows/gds/badge.svg) ![](../../workflows/docs/badge.svg) ![](../../workflows/test/badge.svg) ![](../../workflows/fpga/badge.svg)
 ![](./docs/bwsi.png)
 
+<p align="left">
+  <img src="docs/MITRE_logo.png" alt="MITRE" width="200"><br>
+  <em>MITRE: Proud sponsor of Basics of ASICs</em>
+</p>
+
 # MNIST Neural Network ASIC
 
 This project is a tiny ASIC that recognises handwritten digits. It runs a quantized 3-layer neural network
 (49 → 40 → 20 → 10) on a 7×7 version of an MNIST image and reports the predicted digit, 0 to 9. The network reaches
 **96.21 %** accuracy on the full 10,000-image MNIST test set in RTL simulation. This repository contains the training script,
 the Verilog source, the cocotb testbench and the Tiny Tapeout configuration used to tape the design out on a **1×2 tile**
-(SKY130). It started as a larger, ROM-based design (8-bit weights) and was redesigned to fit a small Tiny Tapeout tile.
+(SKY130). An earlier version of this project kept its weights in an on-chip ROM; this version streams 4-bit weights in so that it fits a 1×2 tile.
 We acknowledge the MIT Beaver Works Summer Institute (BWSI) for their guidance and for creating this opportunity.
 
 Project contributors: Simran Kaur, Mihir Kotamraju, Nimay Shah, Franklin Chen
@@ -57,7 +62,7 @@ The sizes are set by parameters in `src/nn_core.v`:
 | `uo[3:0]` | digit | out | Predicted digit |
 | `uo[4]` | done | out | High when the digit is ready, held until the next `start` |
 | `uo[5]` | ready | out | High when the chip accepts an element this cycle |
-| `uo[7:6]` | layer | out | Layer being fed (1 to 3), 0 when not accepting |
+| `uo[7:6]` | layer | out | Layer being fed (1 to 3), 0 when no image is running |
 
 1. Pulse `start` for one clock, with `in_valid` low.
 2. Stream the 1,960 layer-1 weights with the matching pixels, sending only on cycles where `ready` is high.
@@ -96,7 +101,7 @@ The end of the run: the last layer-3 weights, then `done` goes high and `digit` 
 | `train/train_qat.py` | Quantization-aware training; exports the `.mem` weight files |
 | `tools/eval_accuracy.py` | Bit-exact Python model; reports accuracy on the 10,000 test images |
 | `tools/full_accuracy.py` | Runs all 10,000 test images through the RTL with Icarus Verilog |
-| `test/` | cocotb testbench (`test.py`, `tb.v`, `Makefile`) and `bulk/tb_bulk.v` for the full run |
+| `test/` | cocotb testbench (`test.py`, `tb.v`, `Makefile`, `requirements.txt`) and `bulk/tb_bulk.v` for the full 10,000-image run |
 | `.github/workflows/full_accuracy.yaml` | Workflow that runs the 10,000-image RTL test and prints the accuracy |
 | `docs/` | Datasheet (`info.md`) and the images used in the docs |
 | `info.yaml` | Tiny Tapeout project description and pinout |
@@ -112,12 +117,20 @@ python train/train_qat.py --epochs 300 --h1 40 --h2 20 --A 6 --P 8 --aug 1 --T 3
 python tools/eval_accuracy.py                 # prints accuracy on the 10,000 test images
 ```
 
-`MNIST_DIR` can point to a folder with the four MNIST `.gz` files if the dataset cannot be downloaded.
+`train_qat.py` reads the four MNIST `.gz` files (`train-images-idx3-ubyte.gz`, `train-labels-idx1-ubyte.gz`, `t10k-images-idx3-ubyte.gz`, `t10k-labels-idx1-ubyte.gz`) from the folder in the `MNIST_DIR` environment variable, or from `./mnist/` if it is not set. `tools/eval_accuracy.py` and `tools/full_accuracy.py` download MNIST through torchvision unless you pass `--mnist-dir DIR` with a folder holding those files.
 
 ## Testbench
 
 The cocotb testbench drives the design through the Tiny Tapeout wrapper exactly as a real host would: it resets the chip, pulses `start`,
-streams the weights and pixels, waits for `done` and compares the result with a bit-exact Python model.
+streams the weights and pixels, waits for `done` and compares the result with a bit-exact Python model. Its five tests are:
+
+- `test_reference_model_ranges`: checks that no layer sum overflows the 18-bit accumulator, including for an all-255 image
+- `test_images_back_to_back`: several images in a row
+- `test_real_mnist_digits`: real MNIST test digits (embedded in `test.py`), 20 samples, of which the chip must classify at least 17 correctly
+- `test_random_pauses`: the host pauses at random between weights
+- `test_restart_mid_run`: a new `start` in the middle of an image
+
+The same test runs on the gate-level netlist, because it only uses the top-level pins.
 
 ```sh
 cd test
@@ -166,11 +179,6 @@ After hardening, the layout is DRC and LVS clean. The full 1×2 tile as rendered
 - **The host must honour `ready`.** `ready` drops for one cycle after layers 1 and 2, and an element sent on that cycle is lost.
 - **High utilization.** The 1×2 tile is about 78 % full, so there is little room for further logic.
 - **Accuracy trade-off.** A 7×7 input and 4-bit weights cost accuracy compared with a full-size network. Accuracy was measured on the MNIST test set with 4×4 box-average preprocessing.
-
-<p align="center">
-  <img src="docs/MITRE_logo.png" alt="MITRE" width="200"><br>
-  <em>MITRE: Proud sponsor of Basics of ASICs</em>
-</p>
 
 ## Resources
 
