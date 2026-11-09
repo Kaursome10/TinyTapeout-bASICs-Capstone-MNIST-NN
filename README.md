@@ -99,9 +99,9 @@ The end of the run: the last layer-3 weights, then `done` goes high and `digit` 
 | `src/nn_core.v` | The neural network: control, shift-add MAC, requantization, argmax |
 | `src/weights/` | Trained int4 weights (`weights_W1/W2/W3.mem`, one hex digit per line) |
 | `src/config.json` | Hardening (LibreLane) configuration |
-| `test/` | cocotb testbench (`test.py`, `tb.v`, `Makefile`, `requirements.txt`), the 7×7 MNIST test set (`mnist_test_images.mem`, `mnist_test_labels.mem`) and the script that generates it (`generate.py`) |
-| `sim/` | Standalone protocol testbench (`tb_protocol.v`) with a sample image (`pix.mem`) |
-| `tools/` | Early training and evaluation scripts (`train_quantized.py`, `evaluate_mnist.py`) for a 49 → 50 → 25 → 10 variant with shifts of 6 and 5. They do not match the current 40 → 20 → 10 network and cannot regenerate or check the weights in `src/weights/` |
+| `test/` | cocotb testbench (`test.py`, `tb.v`, `Makefile`, `requirements.txt`, [`README.md`](test/README.md)), the 7×7 MNIST test set (`mnist_test_images.mem`, `mnist_test_labels.mem`) and `generate.py`, which rebuilds those two files from the raw MNIST test files (`t10k-*-ubyte.gz`) |
+| `sim/` | `tb_full.v`: Verilog testbench that streams every MNIST test image through the chip pins (used by `tools/full_accuracy.py`) |
+| `tools/` | `evaluate_mnist.py`: bit-exact Python model of the chip, accuracy on all 10,000 test images. `full_accuracy.py`: runs the same images through the Verilog in Icarus Verilog and checks it against that model |
 | `.github/workflows/` | CI: `gds`, `test`, `docs` and `fpga` |
 | `docs/` | Datasheet (`info.md`) and the images used in the docs |
 | `info.yaml` | Tiny Tapeout project description and pinout |
@@ -110,7 +110,7 @@ The end of the run: the last layer-3 weights, then `done` goes high and `digit` 
 
 The trained weights are checked in as `src/weights/weights_W1.mem`, `weights_W2.mem` and `weights_W3.mem` (signed int4, one hex digit per line, row-major: 1,960 + 800 + 200 values). They were trained with quantization-aware training that mirrors the hardware: 7×7 average-pooled pixels, signed int4 weights, ReLU, rounded shifts of 7 and 4, and a 0…63 clamp, using a straight-through estimator so the forward pass is bit-exact with the chip.
 
-The training script that produced these exact weights is not included in this repository. The scripts in `tools/` are earlier versions for a different network size (see the layout table above).
+The training script that produced these exact weights is not included in this repository. `tools/evaluate_mnist.py` checks the weights, see [Accuracy](#accuracy).
 
 ## Testbench
 
@@ -131,7 +131,18 @@ make                  # RTL simulation
 make -B GATES=yes     # gate-level simulation (needs the netlist from the GDS workflow)
 ```
 
-The checked-in weights classify 9,621 of the 10,000 MNIST test images correctly (96.21 %) when run through the same arithmetic as `reference()` in `test/test.py`, using the 7×7 inputs in `test/mnist_test_images.mem` and the labels in `test/mnist_test_labels.mem`. The full 10,000-image RTL run shown below is not part of CI.
+### Accuracy
+
+The checked-in weights classify 9,621 of the 10,000 MNIST test images correctly (96.21 %), using the 7×7 inputs in `test/mnist_test_images.mem` and the labels in `test/mnist_test_labels.mem`. Two scripts reproduce this:
+
+```sh
+python tools/evaluate_mnist.py    # bit-exact Python model of the chip (numpy only), a few seconds
+python tools/full_accuracy.py     # the same images through the Verilog in Icarus Verilog, several minutes
+```
+
+`full_accuracy.py` needs `iverilog` on the PATH. It exits with an error if the chip's digit differs from the model on any image, if `ready` drops anywhere except the two layer boundaries, or if `done` never rises. Use `--num-images 200` for a quick run. The 10,000-image run is not part of CI, which runs only the five cocotb tests above.
+
+A screenshot of an earlier full 10,000-image RTL run:
 
 ![Full 10,000-image RTL run: 96.21 % accuracy](./docs/testbench.png)
 
