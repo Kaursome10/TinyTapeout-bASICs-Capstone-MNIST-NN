@@ -1,47 +1,53 @@
-# Sample testbench for a Tiny Tapeout project
+# Testbench
 
-This is a sample testbench for a Tiny Tapeout project. It uses [cocotb](https://docs.cocotb.org/en/stable/) to drive the DUT and check the outputs.
-See below to get started or for more information, check the [website](https://tinytapeout.com/hdl/testing/).
+This folder holds the [cocotb](https://docs.cocotb.org/en/stable/) testbench for `tt_um_kaursome10_run_nn`
+(see the [Tiny Tapeout testing guide](https://tinytapeout.com/hdl/testing/) for background). The testbench drives
+only the top-level pins, the way a real host would, and compares every result with a bit-exact Python model.
 
-## Setting up
+| File | Purpose |
+|---|---|
+| `test.py` | The five cocotb tests and the reference model |
+| `tb.v` | Verilog wrapper that instantiates the design and dumps `tb.fst` |
+| `Makefile` | Builds and runs the simulation (RTL or gate level) |
+| `requirements.txt` | Python packages (cocotb, pytest) |
+| `mnist_test_images.mem`, `mnist_test_labels.mem` | The 10,000 MNIST test images, average-pooled to 7×7, and their labels |
+| `t10k-images-idx3-ubyte.gz`, `t10k-labels-idx1-ubyte.gz` | The raw MNIST test set that `generate.py` reads |
+| `generate.py` | Rebuilds the two `.mem` files from the raw MNIST files (numpy only) |
+| `tb.gtkw` | GTKWave signal layout for `tb.fst` |
 
-1. Edit [Makefile](Makefile) and modify `PROJECT_SOURCES` to point to your Verilog files.
-2. Edit [tb.v](tb.v) and replace `tt_um_example` with your module name.
+## Running
 
-## How to run
+You need Icarus Verilog (`iverilog`) and the Python packages:
 
-To run the RTL simulation:
+```sh
+pip install -r requirements.txt
+```
+
+RTL simulation:
 
 ```sh
 make -B
+python -m cocotb_tools.check_results results.xml   # make succeeds even if a test fails, so check the results
 ```
 
-To run gatelevel simulation, first harden your project and copy `../runs/wokwi/results/final/verilog/gl/{your_module_name}.v` to `gate_level_netlist.v`.
-
-Then run:
+Gate-level simulation: first harden the project (the GDS workflow does this and produces the netlist), copy the netlist
+to `gate_level_netlist.v` in this folder, set `PDK_ROOT` to your SKY130 PDK, and run:
 
 ```sh
 make -B GATES=yes
 ```
 
-If you wish to save the waveform in VCD format instead of FST format, edit tb.v to use `$dumpfile("tb.vcd");` and then run:
+To save the waveform as VCD instead of FST, edit `tb.v` to use `$dumpfile("tb.vcd");` and run `make -B FST=`.
 
-```sh
-make -B FST=
-```
-
-This will generate `tb.vcd` instead of `tb.fst`.
-
-## How to view the waveform file
-
-Using GTKWave
+## Viewing waveforms
 
 ```sh
 gtkwave tb.fst tb.gtkw
-```
-
-Using Surfer
-
-```sh
+# or
 surfer tb.fst
 ```
+
+## All 10,000 images
+
+These tests run only a few dozen images. To run every MNIST test image through the Verilog, use
+`python ../tools/full_accuracy.py` (see the [top-level README](../README.md)).

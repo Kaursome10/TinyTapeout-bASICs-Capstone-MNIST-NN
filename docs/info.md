@@ -61,7 +61,7 @@ while the final neuron of that layer is stored. The host sends an element only o
 | `uo[3:0]` | digit | out | Predicted digit, valid once `done` is high. |
 | `uo[4]` | done | out | Goes high when the result is ready and stays high until the next `start`. |
 | `uo[5]` | ready | out | High when the chip accepts an element on this cycle. |
-| `uo[7:6]` | layer | out | Layer currently being fed (1, 2 or 3). 0 when the chip is not accepting. |
+| `uo[7:6]` | layer | out | Layer currently being fed (1, 2 or 3). 0 when no image is running. |
 
 `rst_n` is asynchronous and active low. All `uio` pins are inputs (`uio_oe = 0`).
 
@@ -118,7 +118,7 @@ def send(ui_in, weight):
   line as a single hex digit. It is a 4-bit two's complement value in row-major order (W1 is 40 × 49, W2 is 20 × 40,
   W3 is 10 × 20). A `.mem` digit can be sent as it is.
 - **Pixels:** average-pool the 28×28 MNIST image in non-overlapping 4×4 blocks, round to the nearest integer,
-  and flatten the result row by row into 49 values. `tools/eval_accuracy.py` does exactly this.
+  and flatten the result row by row into 49 values. `test/generate.py` does exactly this for the MNIST test set.
 
 ### Simulation
 
@@ -126,9 +126,9 @@ The cocotb testbench in `test/` streams the weights and a set of MNIST test imag
 using only the chip pins, and compares every result against a bit-exact Python model of the network.
 It also checks the `ready` behaviour and that `done` holds until the next `start`. Run it with `cd test && make`.
 
-To run all 10,000 MNIST test images through the RTL, use the **full_accuracy** GitHub Actions workflow
-(Actions tab → *full_accuracy* → *Run workflow*). The accuracy is shown in the job summary. The result equals the
-Python model in `tools/eval_accuracy.py` on every image.
+To run all 10,000 MNIST test images through the RTL, run `python tools/full_accuracy.py` from the repository root (needs
+Icarus Verilog, takes several minutes). It prints the accuracy and checks that the chip agrees with the Python model in
+`tools/evaluate_mnist.py` on every image. This run is not part of the GitHub Actions CI.
 
 ![Full 10,000-image RTL run](testbench.png)
 
