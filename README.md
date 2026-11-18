@@ -164,7 +164,10 @@ Hardened with LibreLane (OpenROAD) for SKY130 on a 1×2 Tiny Tapeout tile at a 2
 | Antenna violations | none |
 | Setup and hold timing | met at 25 ns |
 
-After hardening, the layout is DRC and LVS clean. The full 1×2 tile as rendered by the Tiny Tapeout GDS viewer, and a close-up of the metal routing:
+After hardening, the layout is DRC and LVS clean. You can explore it interactively:
+
+- [3D layout in the Tiny Tapeout GDS viewer](https://gds-viewer.tinytapeout.com/?model=https://kaursome10.github.io/TinyTapeout-bASICs-Capstone-MNIST-NN/tinytapeout.oas&pdk=sky130A)
+- [3D view in the GDS explorer](https://gds-explorer.tinytapeout.com/viewer?file=https://kaursome10.github.io/TinyTapeout-bASICs-Capstone-MNIST-NN/tinytapeout.oas&pdk=sky130A)
 
 ![GDS layout of the 1x2 tile](./docs/gds_layout.jpg)
 
